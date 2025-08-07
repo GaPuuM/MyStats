@@ -1,254 +1,470 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // --- THEME MANAGEMENT ---
-    const themeSwitcher = document.getElementById('theme-switcher');
-    const themeIcon = document.getElementById('theme-icon');
-    const themes = ['stars', 'light', 'dark'];
-    const icons = {
-        stars: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>`,
-        light: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>`,
-        dark: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>`
-    };
-    let currentThemeIndex = 0;
-
-    function applyTheme(theme) {
-        document.body.setAttribute('data-theme', theme);
-        themeIcon.innerHTML = icons[theme];
-        localStorage.setItem('stellarStatsTheme', theme);
-        currentThemeIndex = themes.indexOf(theme);
-        if (theme === 'stars' && typeof particlesJS !== 'undefined') {
-            if(document.getElementById('particles-js').childElementCount === 0){
-                 particlesJS("particles-js",{"particles":{"number":{"value":80,"density":{"enable":true,"value_area":800}},"color":{"value":"#ffffff"},"shape":{"type":"star"},"opacity":{"value":0.5,"random":true,"anim":{"enable":true,"speed":1,"opacity_min":0.1}},"size":{"value":3,"random":true},"move":{"enable":true,"speed":0.5,"direction":"none","random":true,"out_mode":"out"}}});
-            }
+    // --- STATE MANAGEMENT ---
+    let appData = {
+        categories: [],
+        settings: {
+            theme: 'theme-stars'
+        },
+        ui: {
+            activeCategoryId: null
         }
-        if(state.currentCategory) render();
-    }
+    };
+    let chartInstances = {};
 
-    themeSwitcher.addEventListener('click', () => {
-        currentThemeIndex = (currentThemeIndex + 1) % themes.length;
-        applyTheme(themes[currentThemeIndex]);
-    });
+    const PRESET_COLORS = [
+        { name: 'สีน้ำเงิน', value: '#5470c6' }, { name: 'สีเขียว', value: '#91cc75' },
+        { name: 'สีเหลือง', value: '#fac858' }, { name: 'สีแดง', value: '#ee6666' },
+        { name: 'สีฟ้า', value: '#73c0de' }, { name: 'สีส้ม', value: '#fc8452' },
+        { name: 'สีม่วง', value: '#9a60b4' }, { name: 'สีเขียวเข้ม', value: '#3ba272' }
+    ];
 
-    // --- APP LOGIC ---
-    const mainContent = document.getElementById('main-content');
-    const mainNav = document.getElementById('main-nav');
-    const modals = { category: document.getElementById('add-category-modal'), submetric: document.getElementById('submetric-modal'), data: document.getElementById('manage-data-modal'), confirm: document.getElementById('confirm-modal') };
-    let state = { data: {}, currentCategory: null, activeCharts: new Map() };
-    const colorPalette = ['#00BFFF', '#FF00C1', '#9D00FF', '#feca57', '#48dbfb', '#ff6b6b', '#1dd1a1'];
+    // --- DOM ELEMENTS ---
+    const contentContainer = document.getElementById('content-container');
+    const categoryList = document.getElementById('category-list');
+    const addCategoryBtn = document.getElementById('add-category-btn');
+    const newCategoryNameInput = document.getElementById('new-category-name');
+    const themeSelect = document.getElementById('theme-select');
+    const mainTitle = document.getElementById('main-title');
+    const sidebar = document.getElementById('sidebar');
+    const sidebarToggle = document.getElementById('sidebar-toggle');
 
-    function loadData() {
-        try {
-            const savedData = localStorage.getItem('stellarStatsData');
-            if (savedData) {
-                state.data = JSON.parse(savedData);
-                Object.values(state.data).forEach(category => {
-                    Object.entries(category).forEach(([name, submetric], index) => {
-                        if (!submetric.color) { submetric.color = colorPalette[index % colorPalette.length]; }
+    // --- DATA PERSISTENCE ---
+    const saveData = () => localStorage.setItem('personalStatsAppModern', JSON.stringify(appData));
+    const loadData = () => {
+        const savedData = localStorage.getItem('personalStatsAppModern');
+        if (savedData) {
+            appData = JSON.parse(savedData);
+            // --- Data Migration for older versions ---
+            appData.categories.forEach(cat => {
+                cat.graphs.forEach(graph => {
+                    graph.data.forEach((d, index) => {
+                        if (!d.id) {
+                            d.id = `data-${Date.now()}-${index}`;
+                        }
                     });
                 });
-            } else {
-                state.data = { "สุขภาพ": { "พลังงาน": { type: 'score', color: '#00BFFF', entries: [{date: '2025-08-05', value: 6}, {date: '2025-08-06', value: 8}] }, "การนอน": { type: 'score', color: '#FF00C1', entries: [{date: '2025-08-05', value: 7}, {date: '2025-08-06', value: 5}] }, "น้ำหนัก (กก.)": { type: 'value', color: '#9D00FF', entries: [{date: '2025-08-05', value: 75.5}, {date: '2025-08-06', value: 75.2}]} }, "อารมณ์": { "ความสุข": { type: 'score', color: '#feca57', entries: [{date: '2025-08-06', value: 7}]} } };
-                saveData();
-            }
-            const categories = Object.keys(state.data);
-            state.currentCategory = categories.length > 0 ? categories[0] : null;
-        } catch (error) {
-            console.error("Failed to load or parse data:", error);
-            state.data = {}; state.currentCategory = null; saveData();
-        }
-    }
-    function saveData() { localStorage.setItem('stellarStatsData', JSON.stringify(state.data)); }
-    function render() { destroyAllCharts(); renderNav(); renderCategoryView(); }
-    function destroyAllCharts() { state.activeCharts.forEach(chart => chart.destroy()); state.activeCharts.clear(); }
-
-    function renderNav() {
-        mainNav.innerHTML = '';
-        const categories = Object.keys(state.data);
-        if (categories.length === 0) mainNav.innerHTML = `<span style="color: var(--text-secondary);">เริ่มโดยการเพิ่มหมวดหมู่</span>`;
-        categories.forEach(category => {
-            const link = document.createElement('a');
-            link.href = '#'; link.textContent = category; link.dataset.category = category;
-            if (category === state.currentCategory) link.classList.add('active');
-            link.addEventListener('click', e => { e.preventDefault(); state.currentCategory = category; render(); });
-            mainNav.appendChild(link);
-        });
-    }
-
-    function renderCategoryView() {
-        mainContent.innerHTML = '';
-        if (!state.currentCategory) { mainContent.innerHTML = `<div class="category-header"><h2>ยินดีต้อนรับ!</h2></div><p>กรุณาเพิ่มหมวดหมู่เพื่อเริ่มต้นบันทึกสถิติของคุณ</p>`; return; }
-        const categoryData = state.data[state.currentCategory] || {};
-        const header = document.createElement('div'); header.className = 'category-header'; header.innerHTML = `<h2>${state.currentCategory}</h2>`;
-        const categoryActions = document.createElement('div'); categoryActions.className = 'category-actions';
-        const addSubmetricBtn = document.createElement('button'); addSubmetricBtn.textContent = '＋ เพิ่มกราฟย่อย';
-        addSubmetricBtn.addEventListener('click', () => openSubmetricModal());
-        const deleteCategoryBtn = document.createElement('button'); deleteCategoryBtn.textContent = 'ลบหมวดหมู่นี้'; deleteCategoryBtn.className = 'danger-btn';
-        deleteCategoryBtn.addEventListener('click', handleDeleteCategory);
-        categoryActions.appendChild(addSubmetricBtn); categoryActions.appendChild(deleteCategoryBtn);
-        header.appendChild(categoryActions); mainContent.appendChild(header);
-        renderAggregateChart(categoryData);
-        const grid = document.createElement('div'); grid.className = 'submetrics-grid';
-        if (Object.keys(categoryData).length === 0) grid.innerHTML = `<p>ยังไม่มีกราฟย่อยในหมวดนี้</p>`;
-        else { Object.entries(categoryData).forEach(([name, data]) => { const card = createSubmetricCard(name, data); grid.appendChild(card); const canvas = card.querySelector('canvas'); if (canvas && data.entries && data.entries.length > 0) renderSubmetricChart(canvas, name, data); }); }
-        mainContent.appendChild(grid);
-    }
-
-    function createSubmetricCard(name, data) {
-        const card = document.createElement('div'); card.className = 'submetric-card';
-        const entries = data.entries || [];
-        const latestEntry = entries.length > 0 ? [...entries].sort((a,b) => new Date(b.date) - new Date(a.date))[0] : null;
-        const average = entries.length > 0 ? (entries.reduce((sum, entry) => sum + entry.value, 0) / entries.length).toFixed(1) : 'N/A';
-        const canvasId = `chart-${state.currentCategory}-${name}`.replace(/\s+/g, '-');
-        card.innerHTML = `
-            <div class="card-header">
-                <h3>${name} <span class="metric-type">${data.type === 'score' ? '0-10' : 'ค่า'}</span></h3>
-                <button class="icon-btn edit-submetric-btn" title="แก้ไขกราฟย่อย"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></button>
-            </div>
-            <div class="card-stats">ค่าเฉลี่ย: <strong>${average}</strong> | ล่าสุด: <strong>${latestEntry ? latestEntry.value : 'N/A'}</strong></div>
-            <div class="chart-container-small" style="flex-grow: 1; position: relative;"><canvas id="${canvasId}"></canvas></div>
-            <div class="card-actions"><button class="manage-data-btn">จัดการข้อมูล</button><button class="danger-btn">ลบ</button></div>`;
-        card.querySelector('.manage-data-btn').addEventListener('click', () => openManageDataModal(name));
-        card.querySelector('.danger-btn').addEventListener('click', () => { showConfirmationModal(`คุณแน่ใจหรือไม่ว่าต้องการลบกราฟย่อย "${name}"?`, () => { delete state.data[state.currentCategory][name]; saveData(); render(); }); });
-        card.querySelector('.edit-submetric-btn').addEventListener('click', () => openSubmetricModal(name, data));
-        return card;
-    }
-
-    function createChart(canvas, type, data, options) { if (!canvas) return; if (state.activeCharts.has(canvas.id)) state.activeCharts.get(canvas.id).destroy(); const chart = new Chart(canvas, { type, data, options }); state.activeCharts.set(canvas.id, chart); }
-    
-    function renderAggregateChart(categoryData) {
-        const container = document.createElement('div'); container.className = 'chart-container';
-        container.innerHTML = `<h3>ภาพรวมรายวัน (กราฟแท่ง)</h3><div style="position: relative; height: 250px;"><canvas id="aggregate-chart"></canvas></div>`;
-        mainContent.appendChild(container);
-        const canvas = document.getElementById('aggregate-chart');
-        const scoreEntries = Object.values(categoryData).filter(sub => sub.type === 'score').flatMap(sub => sub.entries || []);
-        if (scoreEntries.length === 0) { container.innerHTML += `<p style="text-align: center; color: var(--text-secondary); padding-top: 1rem;">ไม่มีข้อมูลประเภท "คะแนน" ให้แสดงผลรวม</p>`; return; }
-        const dailyAverages = scoreEntries.reduce((acc, entry) => { acc[entry.date] = acc[entry.date] || { sum: 0, count: 0 }; acc[entry.date].sum += entry.value; acc[entry.date].count++; return acc; }, {});
-        const sortedDates = Object.keys(dailyAverages).sort((a, b) => new Date(a) - new Date(b));
-        
-        const backgroundColors = sortedDates.map((_, index) => `${colorPalette[index % colorPalette.length]}33`);
-        const borderColors = sortedDates.map((_, index) => colorPalette[index % colorPalette.length]);
-
-        const chartData = {
-            labels: sortedDates.map(date => new Date(date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })),
-            datasets: [{ label: `ค่าเฉลี่ยรวม`, data: sortedDates.map(date => dailyAverages[date].sum / dailyAverages[date].count), backgroundColor: backgroundColors, borderColor: borderColors, borderWidth: 1, borderRadius: 5, hoverBackgroundColor: borderColors }]
-        };
-        const options = { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, max: 10, ticks: { color: 'var(--text-secondary)' }, grid: { color: 'rgba(128, 128, 128, 0.15)' } }, x: { ticks: { color: 'var(--text-secondary)' }, grid: { color: 'rgba(128, 128, 128, 0.15)' } } }, plugins: { legend: { display: false } } };
-        createChart(canvas, 'bar', chartData, options);
-    }
-    
-    function renderSubmetricChart(canvas, name, data) {
-        const sortedEntries = [...data.entries].sort((a, b) => new Date(a.date) - new Date(b.date));
-        const color = data.color || '#00BFFF';
-        const chartData = { labels: sortedEntries.map(e => new Date(e.date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })), datasets: [{ label: name, data: sortedEntries.map(e => e.value), borderColor: color, backgroundColor: `${color}33`, tension: 0.4, fill: true, pointRadius: 3 }] };
-        const options = { responsive: true, maintainAspectRatio: false, scales: { y: { display: false, beginAtZero: true }, x: { display: false } }, plugins: { legend: { display: false } } };
-        if (data.type === 'score') { options.scales.y.max = 10; options.scales.y.min = 0; }
-        createChart(canvas, 'line', chartData, options);
-    }
-    
-    function handleDeleteCategory() { showConfirmationModal(`คุณแน่ใจหรือไม่ว่าต้องการลบหมวดหมู่ "${state.currentCategory}" ทั้งหมด?`, () => { delete state.data[state.currentCategory]; state.currentCategory = Object.keys(state.data)[0] || null; saveData(); render(); }); }
-    
-    function openSubmetricModal(name = null, data = null) {
-        const modal = modals.submetric;
-        modal.dataset.originalName = name || '';
-        const isEditing = name !== null;
-        modal.querySelector('#submetric-modal-title').textContent = isEditing ? 'แก้ไขกราฟย่อย' : 'เพิ่มกราฟย่อยใหม่';
-        modal.querySelector('#submetric-name').value = isEditing ? name : '';
-        modal.querySelector('#submetric-type-select').value = isEditing ? data.type : 'score';
-        const palette = modal.querySelector('#color-palette');
-        palette.innerHTML = '';
-        let selectedColor = isEditing ? data.color : colorPalette[0];
-        palette.dataset.selectedColor = selectedColor;
-        colorPalette.forEach(color => {
-            const swatch = document.createElement('div');
-            swatch.className = 'color-swatch';
-            swatch.style.backgroundColor = color;
-            swatch.dataset.color = color;
-            if (color === selectedColor) { swatch.classList.add('selected'); }
-            swatch.addEventListener('click', () => {
-                palette.querySelector('.selected')?.classList.remove('selected');
-                swatch.classList.add('selected');
-                palette.dataset.selectedColor = color;
             });
-            palette.appendChild(swatch);
+            if (!appData.ui) appData.ui = { activeCategoryId: null };
+        } else {
+            // Default data for new users
+            appData.categories = [{
+                id: 'cat-1', name: 'สุขภาพ',
+                graphs: [
+                    { id: 'graph-1', name: 'คุณภาพการนอน', type: 'scale', color: '#5470c6', data: [{id: 'd-1', date: '2025-08-01', value: 7}, {id: 'd-2', date: '2025-08-02', value: 8}, {id: 'd-3', date: '2025-08-03', value: 6.5}] },
+                    { id: 'graph-2', name: 'ระดับความเครียด', type: 'scale', color: '#ee6666', data: [{id: 'd-4', date: '2025-08-01', value: 4}, {id: 'd-5', date: '2025-08-02', value: 3}, {id: 'd-6', date: '2025-08-03', value: 5}] }
+                ]
+            }];
+        }
+        if (!appData.ui.activeCategoryId && appData.categories.length > 0) {
+            appData.ui.activeCategoryId = appData.categories[0].id;
+        }
+    };
+
+    // --- RENDERING ENGINE ---
+    const render = () => {
+        applyTheme();
+        renderNavigation();
+        renderContent();
+    };
+
+    const renderNavigation = () => {
+        categoryList.innerHTML = '';
+        appData.categories.forEach(category => {
+            const li = document.createElement('li');
+            const a = document.createElement('a');
+            a.className = 'category-link';
+            a.textContent = category.name;
+            a.onclick = () => {
+                appData.ui.activeCategoryId = category.id;
+                if (window.innerWidth <= 768) sidebar.classList.remove('open');
+                render();
+            };
+            if (category.id === appData.ui.activeCategoryId) {
+                a.classList.add('active');
+            }
+            li.appendChild(a);
+            categoryList.appendChild(li);
         });
-        openModal(modal);
-    }
-    
-    function openManageDataModal(submetricName) {
-        const modal = modals.data; const submetric = state.data[state.currentCategory][submetricName];
-        modal.dataset.currentSubmetric = submetricName;
-        modal.querySelector('#manage-data-modal-title').textContent = `จัดการข้อมูล`;
-        modal.querySelector('#manage-data-modal-subtitle').textContent = `สำหรับ: ${submetricName}`;
-        const scoreInput = modal.querySelector('#data-score'); const scoreLabel = modal.querySelector('#data-score-label');
-        if (submetric.type === 'score') { scoreLabel.textContent = "คะแนน (0-10):"; scoreInput.min = 0; scoreInput.max = 10; scoreInput.step = 1; }
-        else { scoreLabel.textContent = "ค่า:"; scoreInput.removeAttribute('min'); scoreInput.removeAttribute('max'); scoreInput.step = 'any'; }
-        renderDataEntriesList(submetricName); resetDataForm(); openModal(modal);
-    }
-    
-    function renderDataEntriesList(submetricName) {
-        const listEl = document.getElementById('data-entries-list'); listEl.innerHTML = ''; const entries = state.data[state.currentCategory][submetricName].entries || [];
-        if(entries.length === 0) { listEl.innerHTML = `<li>ไม่มีข้อมูล</li>`; return; }
-        [...entries].sort((a, b) => new Date(b.date) - new Date(a.date)).forEach(entry => {
-            const item = document.createElement('li'); item.className = 'entry-item';
-            item.innerHTML = `<div class="info"><span class="date">${new Date(entry.date).toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' })}</span></div><div class="info"><span class="score">${entry.value}</span></div><div class="actions"><button class="edit-btn">แก้ไข</button><button class="danger-btn">ลบ</button></div>`;
-            item.querySelector('.edit-btn').addEventListener('click', () => populateDataFormForEdit(entry));
-            item.querySelector('.danger-btn').addEventListener('click', () => { showConfirmationModal(`ลบข้อมูลวันที่ ${new Date(entry.date).toLocaleDateString('th-TH')}?`, () => deleteDataPoint(submetricName, entry.date)); });
-            listEl.appendChild(item);
+    };
+
+    const renderContent = () => {
+        destroyAllCharts();
+        const activeCategory = appData.categories.find(c => c.id === appData.ui.activeCategoryId);
+
+        if (activeCategory) {
+            mainTitle.textContent = activeCategory.name;
+            contentContainer.innerHTML = `
+                <div class="page-header">
+                    <h2>ภาพรวม: ${activeCategory.name}</h2>
+                    <div>
+                        <button onclick="window.openAddGraphModal('${activeCategory.id}')">เพิ่มกราฟย่อย</button>
+                        <button class="btn-danger" onclick="window.confirmDelete('category', '${activeCategory.id}')">ลบหมวดหมู่นี้</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <canvas id="main-category-chart"></canvas>
+                </div>
+                <div class="graphs-grid">
+                    ${activeCategory.graphs.map(createGraphCardHTML).join('')}
+                </div>
+            `;
+            renderMainCategoryChart(activeCategory);
+            activeCategory.graphs.forEach(graph => {
+                renderSubGraph(graph);
+                renderDataList(graph);
+            });
+        } else {
+            mainTitle.textContent = 'Dashboard';
+            contentContainer.innerHTML = `
+                <div class="card" style="text-align: center; padding: 4rem;">
+                    <h2>ยินดีต้อนรับ!</h2>
+                    <p>เริ่มต้นด้วยการสร้าง "หมวดหมู่" ใหม่ทางด้านซ้ายมือ</p>
+                </div>
+            `;
+        }
+    };
+
+    const createGraphCardHTML = (graph) => `
+        <div class="card graph-card" id="graph-card-${graph.id}">
+            <div class="graph-card-header">
+                <h3>${graph.name}</h3>
+                <button class="btn-danger" style="padding: 4px 8px; font-size: 0.8rem;" onclick="window.confirmDelete('graph', '${graph.id}')">ลบ</button>
+            </div>
+            <canvas id="chart-graph-${graph.id}" height="200"></canvas>
+            <button class="btn-secondary" style="width:100%; margin-top: 1rem;" onclick="window.openAddDataModal('${graph.id}', null)">เพิ่มข้อมูล</button>
+            <ul class="data-list" id="data-list-${graph.id}"></ul>
+        </div>
+    `;
+
+    const renderDataList = (graph) => {
+        const listEl = document.getElementById(`data-list-${graph.id}`);
+        if (!listEl) return;
+        listEl.innerHTML = '';
+        [...graph.data].sort((a, b) => new Date(b.date) - new Date(a.date)).forEach(dataPoint => {
+            const li = document.createElement('li');
+            li.innerHTML = `
+                <span>${dataPoint.date}: <strong>${dataPoint.value}</strong></span>
+                <div>
+                    <button style="background:none; color: var(--text-color);" onclick="window.openAddDataModal('${graph.id}', '${dataPoint.id}')">✏️</button>
+                    <button style="background:none; color: var(--danger-color);" onclick="window.confirmDelete('data', '${graph.id}', '${dataPoint.id}')">🗑️</button>
+                </div>
+            `;
+            listEl.appendChild(li);
         });
-    }
-    function resetDataForm() { const form = document.getElementById('manage-data-form'); form.querySelector('#data-date').valueAsDate = new Date(); form.querySelector('#data-date').readOnly = false; form.querySelector('#data-score').value = state.data[state.currentCategory][modals.data.dataset.currentSubmetric].type === 'score' ? 5 : ''; form.querySelector('#confirm-manage-data').textContent = "＋ เพิ่มข้อมูลใหม่"; }
-    function populateDataFormForEdit(entry) { const form = document.getElementById('manage-data-form'); form.querySelector('#data-date').value = entry.date; form.querySelector('#data-date').readOnly = true; form.querySelector('#data-score').value = entry.value; form.querySelector('#confirm-manage-data').textContent = "✓ อัปเดตข้อมูล"; }
-    function deleteDataPoint(submetricName, date) { const entries = state.data[state.currentCategory][submetricName].entries; const index = entries.findIndex(e => e.date === date); if(index > -1) entries.splice(index, 1); saveData(); renderDataEntriesList(submetricName); }
-    document.getElementById('confirm-manage-data').addEventListener('click', () => {
-        const modal = modals.data; const submetricName = modal.dataset.currentSubmetric; const dateInput = modal.querySelector('#data-date'); const date = dateInput.value; const scoreInput = modal.querySelector('#data-score'); let score = parseFloat(scoreInput.value);
-        if (!date || isNaN(score)) { alert('กรุณากรอกข้อมูลให้ครบถ้วน'); return; }
-        const submetricType = state.data[state.currentCategory][submetricName].type;
-        if (submetricType === 'score') { if (score < 0) score = 0; if (score > 10) score = 10; }
-        const entries = state.data[state.currentCategory][submetricName].entries; const existingIndex = entries.findIndex(e => e.date === date);
-        if (dateInput.readOnly) { if(existingIndex > -1) entries[existingIndex].value = score; }
-        else { if(existingIndex > -1) { alert('มีข้อมูลสำหรับวันนี้อยู่แล้ว กรุณาใช้ปุ่ม "แก้ไข"'); return; } entries.push({ date, value: score }); }
-        saveData(); renderDataEntriesList(submetricName); resetDataForm();
+    };
+
+    // --- CHART RENDERING ---
+    const destroyAllCharts = () => {
+        Object.values(chartInstances).forEach(chart => chart.destroy());
+        chartInstances = {};
+    };
+
+    const getChartOptions = () => ({
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { labels: { color: getComputedStyle(document.body).getPropertyValue('--text-color'), font: { family: getComputedStyle(document.body).getPropertyValue('--font-family') } } },
+            title: { color: getComputedStyle(document.body).getPropertyValue('--text-color'), font: { family: getComputedStyle(document.body).getPropertyValue('--font-family') } }
+        },
+        scales: {
+            y: {
+                ticks: { color: getComputedStyle(document.body).getPropertyValue('--text-color'), font: { family: getComputedStyle(document.body).getPropertyValue('--font-family') } },
+                grid: { color: getComputedStyle(document.body).getPropertyValue('--border-color') }
+            },
+            x: {
+                ticks: { color: getComputedStyle(document.body).getPropertyValue('--text-color'), font: { family: getComputedStyle(document.body).getPropertyValue('--font-family') } },
+                grid: { color: getComputedStyle(document.body).getPropertyValue('--border-color') }
+            }
+        }
     });
-    function openModal(modal) { modal.classList.add('show'); const input = modal.querySelector('input[type="text"]'); if (input) { input.focus(); } }
-    function closeModal(modal) { modal.classList.remove('show'); if (modal.id !== 'confirm-modal') render(); }
-    function showConfirmationModal(message, onConfirm) {
-        const modal = modals.confirm; modal.querySelector('#confirm-modal-message').textContent = message;
-        const confirmBtn = modal.querySelector('#confirm-modal-confirm-btn'); const cancelBtn = modal.querySelector('#confirm-modal-cancel-btn');
-        const confirmHandler = () => { onConfirm(); closeModal(modal); }; const cancelHandler = () => closeModal(modal);
-        confirmBtn.addEventListener('click', confirmHandler, { once: true }); cancelBtn.addEventListener('click', cancelHandler, { once: true });
-        openModal(modal);
-    }
-    document.querySelectorAll('.modal').forEach(modal => { const closeBtn = modal.querySelector('.close-button'); if (closeBtn) closeBtn.addEventListener('click', () => closeModal(modal)); modal.addEventListener('click', e => { if (e.target === modal) closeModal(modal); }); });
-    document.getElementById('add-category-btn').addEventListener('click', () => openModal(modals.category));
-    document.getElementById('confirm-add-category').addEventListener('click', () => { const input = document.getElementById('new-category-name'); const newName = input.value.trim(); if (newName && !state.data[newName]) { state.data[newName] = {}; state.currentCategory = newName; saveData(); closeModal(modals.category); render(); } else { alert(newName ? 'ชื่อหมวดหมู่นี้มีอยู่แล้ว' : 'กรุณาใส่ชื่อหมวดหมู่'); } });
-    document.getElementById('confirm-submetric').addEventListener('click', () => {
-        const modal = modals.submetric;
-        const originalName = modal.dataset.originalName;
-        const newName = modal.querySelector('#submetric-name').value.trim();
-        const type = modal.querySelector('#submetric-type-select').value;
-        const color = modal.querySelector('#color-palette').dataset.selectedColor;
-        if (!newName) { alert('กรุณาใส่ชื่อกราฟย่อย'); return; }
-        const currentSubmetrics = state.data[state.currentCategory];
-        if (newName !== originalName && currentSubmetrics[newName]) { alert('ชื่อกราฟย่อยนี้มีอยู่แล้ว'); return; }
-        if (originalName && newName !== originalName) {
-            const dataToMove = currentSubmetrics[originalName];
-            delete currentSubmetrics[originalName];
-            currentSubmetrics[newName] = dataToMove;
+
+    const renderMainCategoryChart = (category) => {
+        const ctx = document.getElementById('main-category-chart')?.getContext('2d');
+        if (!ctx) return;
+        const chartOptions = getChartOptions();
+        chartOptions.plugins.title = { display: true, text: `ภาพรวมคะแนนเฉลี่ย`, font: { size: 16 } };
+        chartOptions.plugins.legend.display = false;
+
+        chartInstances['main-category'] = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: category.graphs.map(g => g.name),
+                datasets: [{
+                    label: 'คะแนนเฉลี่ย',
+                    data: category.graphs.map(g => g.data.length > 0 ? g.data.reduce((sum, item) => sum + parseFloat(item.value), 0) / g.data.length : 0),
+                    backgroundColor: category.graphs.map(g => g.color),
+                }]
+            },
+            options: chartOptions
+        });
+    };
+
+    const renderSubGraph = (graph) => {
+        const ctx = document.getElementById(`chart-graph-${graph.id}`)?.getContext('2d');
+        if (!ctx) return;
+        const chartOptions = getChartOptions();
+        chartOptions.scales.y.beginAtZero = graph.type === 'scale';
+        if (graph.type === 'scale') chartOptions.scales.y.max = 10;
+        chartOptions.plugins.legend.display = false;
+        chartOptions.scales.x.type = 'time';
+        chartOptions.scales.x.time = { unit: 'day' };
+
+        chartInstances[`graph-${graph.id}`] = new Chart(ctx, {
+            type: 'line',
+            data: {
+                datasets: [{
+                    label: graph.name,
+                    data: [...graph.data].sort((a, b) => new Date(a.date) - new Date(b.date)).map(d => ({x: d.date, y: d.value})),
+                    borderColor: graph.color,
+                    tension: 0.3,
+                    fill: true,
+                    backgroundColor: `${graph.color}33`
+                }]
+            },
+            options: chartOptions
+        });
+    };
+
+    // --- THEME & ANIMATION ---
+    const applyTheme = () => {
+        document.body.className = '';
+        document.body.classList.add(appData.settings.theme);
+        themeSelect.value = appData.settings.theme;
+        if (appData.settings.theme === 'theme-stars') {
+            initStarsBackground();
+        } else {
+            const canvas = document.getElementById('stars-bg');
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if(window.animationFrameId) cancelAnimationFrame(window.animationFrameId);
         }
-        if (!currentSubmetrics[newName]) {
-            currentSubmetrics[newName] = { entries: [] };
-        }
-        currentSubmetrics[newName].type = type;
-        currentSubmetrics[newName].color = color;
+    };
+
+    themeSelect.addEventListener('change', (e) => {
+        appData.settings.theme = e.target.value;
         saveData();
-        closeModal(modal);
+        render();
     });
-    function exportToFile(filename, content, type) { const blob = new Blob([content], { type }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url); }
-    document.getElementById('export-json').addEventListener('click', () => exportToFile('stellar_stats.json', JSON.stringify(state.data, null, 2), 'application/json'));
-    document.getElementById('export-csv').addEventListener('click', () => { let csv = "Category,SubMetric,Type,Date,Value\n"; for (const cat in state.data) { for (const sub in state.data[cat]) { (state.data[cat][sub].entries || []).forEach(e => { csv += `${cat},${sub},${state.data[cat][sub].type},${e.date},${e.value}\n`; }); } } exportToFile('stellar_stats.csv', "\uFEFF" + csv, 'text/csv;charset=utf-8;'); });
+
+    function initStarsBackground() {
+        const canvas = document.getElementById('stars-bg');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        let particles = [];
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        const createParticles = () => {
+            particles = [];
+            let numberOfParticles = (canvas.height * canvas.width) / 9000;
+            for (let i = 0; i < numberOfParticles; i++) {
+                let size = Math.random() * 2 + 1;
+                let x = (Math.random() * ((innerWidth - size * 2) - (size * 2)) + size * 2);
+                let y = (Math.random() * ((innerHeight - size * 2) - (size * 2)) + size * 2);
+                let directionX = (Math.random() * .4) - .2;
+                let directionY = (Math.random() * .4) - .2;
+                particles.push({ x, y, directionX, directionY, size });
+            }
+        };
+
+        const connect = () => {
+            let opacityValue = 1;
+            for (let a = 0; a < particles.length; a++) {
+                for (let b = a; b < particles.length; b++) {
+                    let distance = ((particles[a].x - particles[b].x) * (particles[a].x - particles[b].x))
+                                 + ((particles[a].y - particles[b].y) * (particles[a].y - particles[b].y));
+                    if (distance < (canvas.width / 7) * (canvas.height / 7)) {
+                        opacityValue = 1 - (distance / 20000);
+                        ctx.strokeStyle = `rgba(140, 155, 180, ${opacityValue})`;
+                        ctx.lineWidth = 1;
+                        ctx.beginPath();
+                        ctx.moveTo(particles[a].x, particles[a].y);
+                        ctx.lineTo(particles[b].x, particles[b].y);
+                        ctx.stroke();
+                    }
+                }
+            }
+        };
+
+        const animate = () => {
+            window.animationFrameId = requestAnimationFrame(animate);
+            ctx.clearRect(0, 0, innerWidth, innerHeight);
+            for (let i = 0; i < particles.length; i++) {
+                let particle = particles[i];
+                if (particle.x < 0 || particle.x > canvas.width) particle.directionX = -particle.directionX;
+                if (particle.y < 0 || particle.y > canvas.height) particle.directionY = -particle.directionY;
+                particle.x += particle.directionX;
+                particle.y += particle.directionY;
+                ctx.beginPath();
+                ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(224, 230, 241, 0.8)';
+                ctx.fill();
+            }
+            connect();
+        };
+        
+        window.addEventListener('resize', () => {
+            canvas.width = innerWidth;
+            canvas.height = innerHeight;
+            createParticles();
+        });
+
+        if(window.animationFrameId) cancelAnimationFrame(window.animationFrameId);
+        createParticles();
+        animate();
+    }
+
+    // --- ACTIONS & EVENT HANDLERS ---
+    addCategoryBtn.addEventListener('click', () => {
+        const name = newCategoryNameInput.value.trim();
+        if (name) {
+            const newCategory = { id: `cat-${Date.now()}`, name, graphs: [] };
+            appData.categories.push(newCategory);
+            appData.ui.activeCategoryId = newCategory.id;
+            saveData();
+            render();
+            newCategoryNameInput.value = '';
+        }
+    });
+
+    const findGraph = (graphId) => {
+        for (const category of appData.categories) {
+            const graph = category.graphs.find(g => g.id === graphId);
+            if (graph) return { category, graph };
+        }
+        return {};
+    };
+
+    const deleteCategory = (categoryId) => {
+        appData.categories = appData.categories.filter(c => c.id !== categoryId);
+        if (appData.ui.activeCategoryId === categoryId) {
+            appData.ui.activeCategoryId = appData.categories.length > 0 ? appData.categories[0].id : null;
+        }
+        saveData();
+        render();
+    };
+
+    const deleteGraph = (graphId) => {
+        const { category } = findGraph(graphId);
+        if (category) {
+            category.graphs = category.graphs.filter(g => g.id !== graphId);
+            saveData();
+            render();
+        }
+    };
+
+    const deleteData = (graphId, dataId) => {
+        const { graph } = findGraph(graphId);
+        if (graph) {
+            graph.data = graph.data.filter(d => d.id !== dataId);
+            saveData();
+            render();
+        }
+    };
+
+    // --- MODAL LOGIC (REFACTORED TO USE IDs) ---
+    window.openAddGraphModal = (categoryId) => {
+        document.getElementById('modal-category-id').value = categoryId;
+        document.getElementById('graph-name').value = '';
+        document.getElementById('graph-type').value = 'scale';
+        const colorSelect = document.getElementById('graph-color');
+        colorSelect.innerHTML = PRESET_COLORS.map(c => `<option value="${c.value}">${c.name}</option>`).join('');
+        document.getElementById('add-graph-modal').style.display = 'flex';
+    };
+
+    document.getElementById('save-graph-btn').addEventListener('click', () => {
+        const categoryId = document.getElementById('modal-category-id').value;
+        const name = document.getElementById('graph-name').value.trim();
+        const type = document.getElementById('graph-type').value;
+        const color = document.getElementById('graph-color').value;
+        if (name) {
+            const newGraph = { id: `graph-${Date.now()}`, name, type, color, data: [] };
+            appData.categories.find(c => c.id === categoryId).graphs.push(newGraph);
+            saveData();
+            render();
+            closeModal('add-graph-modal');
+        }
+    });
+
+    window.openAddDataModal = (graphId, dataId) => {
+        const { graph } = findGraph(graphId);
+        if (!graph) return;
+        document.getElementById('modal-graph-id').value = graphId;
+        const valueInput = document.getElementById('data-value');
+        const valueLabel = document.getElementById('data-value-label');
+        if (graph.type === 'scale') {
+            valueInput.min = 0; valueInput.max = 10; valueInput.step = 0.1;
+            valueLabel.textContent = 'คะแนน (0–10):';
+        } else {
+            valueInput.removeAttribute('min'); valueInput.removeAttribute('max'); valueInput.step = 'any';
+            valueLabel.textContent = 'ค่า:';
+        }
+        
+        if (dataId) { // Editing existing data
+            const dataPoint = graph.data.find(d => d.id === dataId);
+            document.getElementById('data-modal-title').textContent = 'แก้ไขข้อมูล';
+            document.getElementById('data-date').value = dataPoint.date;
+            document.getElementById('data-value').value = dataPoint.value;
+            document.getElementById('modal-data-id').value = dataId;
+        } else { // Adding new data
+            document.getElementById('data-modal-title').textContent = 'เพิ่มข้อมูลใหม่';
+            document.getElementById('data-date').valueAsDate = new Date();
+            document.getElementById('data-value').value = '';
+            document.getElementById('modal-data-id').value = ''; // Clear the ID
+        }
+        document.getElementById('add-data-modal').style.display = 'flex';
+    };
     
+    document.getElementById('save-data-btn').addEventListener('click', () => {
+        const graphId = document.getElementById('modal-graph-id').value;
+        const dataId = document.getElementById('modal-data-id').value;
+        const date = document.getElementById('data-date').value;
+        const valueStr = document.getElementById('data-value').value;
+        if (!date || valueStr === '' || isNaN(parseFloat(valueStr))) return;
+        const value = parseFloat(valueStr);
+        const { graph } = findGraph(graphId);
+        if (graph) {
+            if (dataId) { // Editing
+                const dataPoint = graph.data.find(d => d.id === dataId);
+                if(dataPoint) {
+                    dataPoint.date = date;
+                    dataPoint.value = value;
+                }
+            } else { // Adding new
+                graph.data.push({ id: `data-${Date.now()}`, date, value });
+            }
+            saveData();
+            render();
+            closeModal('add-data-modal');
+        }
+    });
+
+    window.closeModal = (modalId) => document.getElementById(modalId).style.display = 'none';
+
+    // --- CONFIRM MODAL ---
+    let confirmCallback = null;
+    window.confirmDelete = (type, id1, id2) => {
+        document.getElementById('confirm-modal').style.display = 'flex';
+        confirmCallback = () => {
+            if (type === 'category') deleteCategory(id1);
+            if (type === 'graph') deleteGraph(id1);
+            if (type === 'data') deleteData(id1, id2);
+            closeModal('confirm-modal');
+        };
+    };
+    document.getElementById('confirm-ok-btn').addEventListener('click', () => confirmCallback && confirmCallback());
+    document.getElementById('confirm-cancel-btn').addEventListener('click', () => closeModal('confirm-modal'));
+
+    // Sidebar Toggle for Mobile
+    sidebarToggle.addEventListener('click', () => sidebar.classList.toggle('open'));
+    document.addEventListener('click', (e) => {
+        if (!sidebar.contains(e.target) && !sidebarToggle.contains(e.target) && sidebar.classList.contains('open')) {
+            sidebar.classList.remove('open');
+        }
+    });
+
     // --- INITIALIZATION ---
-    const savedTheme = localStorage.getItem('stellarStatsTheme') || 'stars';
     loadData();
-    applyTheme(savedTheme);
+    render();
 });
-</script>
+
