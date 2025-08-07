@@ -3,108 +3,50 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Personal Stats Dashboard</title>
-    <link rel="stylesheet" href="style.css">
+    <title>Stellar Stats - V12</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@300;400;500;700&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.0/chartjs-adapter-date-fns.bundle.min.js"></script>
-</head>
-<body>
-    <!-- Animated background for Stars Theme -->
-    <canvas id="stars-bg"></canvas>
-
-    <div class="app-layout">
-        <!-- Sidebar Navigation -->
-        <nav id="sidebar">
-            <div class="sidebar-header">
-                <h2>หมวดหมู่</h2>
-            </div>
-            <ul id="category-list">
-                <!-- Category links will be rendered here -->
-            </ul>
-            <div class="sidebar-footer">
-                <input type="text" id="new-category-name" placeholder="ชื่อหมวดหมู่ใหม่...">
-                <button id="add-category-btn">เพิ่มหมวดหมู่</button>
-            </div>
-        </nav>
-
-        <!-- Main Content Area -->
-        <main id="main-content">
-            <header class="main-header">
-                <button id="sidebar-toggle">☰</button>
-                <h1 id="main-title">Dashboard</h1>
-                 <div class="theme-switcher">
-                    <label for="theme-select">ธีม:</label>
-                    <select id="theme-select">
-                        <option value="theme-stars">✨ ดวงดาว</option>
-                        <option value="theme-dark">🌙 มืด</option>
-                        <option value="theme-light">☀️ สว่าง</option>
-                    </select>
-                </div>
-            </header>
-            <div id="content-container">
-                <!-- Active category content will be rendered here -->
-            </div>
-        </main>
-    </div>
-
-    <!-- Modals (re-styled) -->
-    <div id="add-graph-modal" class="modal-overlay" style="display: none;">
-        <div class="modal-content">
-            <span class="close-btn" onclick="closeModal('add-graph-modal')">&times;</span>
-            <h2>เพิ่มกราฟย่อยใหม่</h2>
-            <input type="hidden" id="modal-category-id">
-            <div class="form-group">
-                <label for="graph-name">ชื่อกราฟ:</label>
-                <input type="text" id="graph-name" placeholder="เช่น คุณภาพการนอน, ชั่วโมงอ่านหนังสือ">
-            </div>
-            <div class="form-group">
-                <label for="graph-type">ประเภทคะแนน:</label>
-                <select id="graph-type">
-                    <option value="scale">ช่วงคะแนน 0–10</option>
-                    <option value="free">ตัวเลขอิสระ</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label for="graph-color">สีของเส้นกราฟ:</label>
-                <select id="graph-color"></select>
-            </div>
-            <button id="save-graph-btn">บันทึก</button>
-        </div>
-    </div>
-
-    <div id="add-data-modal" class="modal-overlay" style="display: none;">
-        <div class="modal-content">
-            <span class="close-btn" onclick="closeModal('add-data-modal')">&times;</span>
-            <h2 id="data-modal-title">เพิ่มข้อมูลใหม่</h2>
-            <input type="hidden" id="modal-graph-id">
-            <input type="hidden" id="modal-data-id">
-            <div class="form-group">
-                <label for="data-date">วันที่:</label>
-                <input type="date" id="data-date">
-            </div>
-            <div class="form-group">
-                <label for="data-value" id="data-value-label">คะแนน (0–10):</label>
-                <input type="number" id="data-value" min="0" max="10" step="0.1">
-            </div>
-            <button id="save-data-btn">บันทึกข้อมูล</button>
-        </div>
-    </div>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
     
-    <div id="confirm-modal" class="modal-overlay" style="display: none;">
-        <div class="modal-content">
-            <h2 id="confirm-title">ยืนยันการลบ</h2>
-            <p id="confirm-text">คุณแน่ใจหรือไม่ว่าต้องการลบรายการนี้? การกระทำนี้ไม่สามารถย้อนกลับได้</p>
-            <div class="confirm-buttons">
-                <button id="confirm-ok-btn" class="btn-danger">ตกลง</button>
-                <button id="confirm-cancel-btn">ยกเลิก</button>
+    <!-- Stylesheet -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body data-theme="stars">
+    <div id="particles-js"></div>
+    <div class="container">
+        <header>
+            <div class="header-top">
+                <div class="logo">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon></svg>
+                    <h1>Stellar Stats</h1>
+                </div>
+                <div class="header-actions">
+                    <button id="export-json">Export JSON</button>
+                    <button id="export-csv">Export CSV</button>
+                    <button id="theme-switcher" class="theme-switcher" title="สลับธีม">
+                        <svg id="theme-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+                    </button>
+                </div>
             </div>
-        </div>
+            <div class="nav-container">
+                <nav id="main-nav"></nav>
+                <button id="add-category-btn" title="เพิ่มหมวดหมู่ใหม่">+</button>
+            </div>
+        </header>
+        <main id="main-content"></main>
     </div>
 
+    <!-- Modals -->
+    <div id="add-category-modal" class="modal"><div class="modal-content"><span class="close-button">&times;</span><h2>เพิ่มหมวดหมู่ใหม่</h2><div class="modal-form" style="border:0;padding:0;"><input type="text" id="new-category-name" placeholder="เช่น 'การทำงาน'"><button id="confirm-add-category" style="width: 100%;">ยืนยัน</button></div></div></div>
+    <div id="submetric-modal" class="modal"><div class="modal-content"><span class="close-button">&times;</span><h2 id="submetric-modal-title"></h2><div class="modal-form" style="border:0;padding:0;"><label for="submetric-name">ชื่อกราฟย่อย:</label><input type="text" id="submetric-name"><label>ประเภทข้อมูล:</label><select id="submetric-type-select"><option value="score">คะแนน (0-10)</option><option value="value">ค่าตัวเลข</option></select><label>สีของกราฟ:</label><div id="color-palette" class="color-palette"></div><button id="confirm-submetric" style="width: 100%; margin-top: 1rem;">ยืนยัน</button></div></div></div>
+    <div id="manage-data-modal" class="modal"><div class="modal-content"><span class="close-button">&times;</span><h2 id="manage-data-modal-title">จัดการข้อมูล</h2><h3 id="manage-data-modal-subtitle"></h3><div class="modal-form" id="manage-data-form"><label for="data-date">วันที่:</label><input type="date" id="data-date"><label for="data-score" id="data-score-label">คะแนน (0-10):</label><input type="number" id="data-score" value="5"><button id="confirm-manage-data" style="width: 100%;">บันทึกข้อมูล</button></div><ul id="data-entries-list"></ul></div></div>
+    <div id="confirm-modal" class="modal"><div class="modal-content"><h2 id="confirm-modal-title">ยืนยันการกระทำ</h2><p id="confirm-modal-message">คุณแน่ใจหรือไม่?</p><div class="modal-actions"><button id="confirm-modal-cancel-btn" class="secondary-btn">ยกเลิก</button><button id="confirm-modal-confirm-btn" class="danger-btn">ยืนยัน</button></div></div></div>
+
+    <!-- External Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/particles.js@2.0.0/particles.min.js"></script>
+    
+    <!-- Main Script -->
     <script src="script.js"></script>
 </body>
 </html>
-
