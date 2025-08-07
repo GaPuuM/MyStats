@@ -257,15 +257,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function initializeApp() {
         loadData();
         const savedTheme = localStorage.getItem('stellarStatsTheme') || 'stars';
-        // Apply theme visuals without rendering initially
-        document.body.setAttribute('data-theme', savedTheme);
-        themeIcon.innerHTML = icons[savedTheme];
-        currentThemeIndex = themes.indexOf(savedTheme);
-        if (savedTheme === 'stars' && typeof particlesJS !== 'undefined') {
-            particlesJS("particles-js",{"particles":{"number":{"value":80,"density":{"enable":true,"value_area":800}},"color":{"value":"#ffffff"},"shape":{"type":"star"},"opacity":{"value":0.5,"random":true,"anim":{"enable":true,"speed":1,"opacity_min":0.1}},"size":{"value":3,"random":true},"move":{"enable":true,"speed":0.5,"direction":"none","random":true,"out_mode":"out"}}});
-        }
-        // Now, do the first full render
-        render();
+        applyTheme(savedTheme);
     }
 
     initializeApp();
