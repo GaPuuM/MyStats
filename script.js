@@ -20,7 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
                  particlesJS("particles-js",{"particles":{"number":{"value":80,"density":{"enable":true,"value_area":800}},"color":{"value":"#ffffff"},"shape":{"type":"star"},"opacity":{"value":0.5,"random":true,"anim":{"enable":true,"speed":1,"opacity_min":0.1}},"size":{"value":3,"random":true},"move":{"enable":true,"speed":0.5,"direction":"none","random":true,"out_mode":"out"}}});
             }
         }
-        render(); // Re-render charts with new theme colors
+        render();
     }
 
     themeSwitcher.addEventListener('click', () => {
@@ -57,7 +57,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     function saveData() { localStorage.setItem('stellarStatsData', JSON.stringify(state.data)); }
-    function render() { destroyAllCharts(); renderNav(); renderCategoryView(); }
+    function render() {
+        if (!state.currentCategory && Object.keys(state.data).length > 0) {
+            state.currentCategory = Object.keys(state.data)[0];
+        }
+        destroyAllCharts(); 
+        renderNav(); 
+        renderCategoryView(); 
+    }
     function destroyAllCharts() { state.activeCharts.forEach(chart => chart.destroy()); state.activeCharts.clear(); }
 
     function renderNav() {
@@ -250,17 +257,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function initializeApp() {
         loadData();
         const savedTheme = localStorage.getItem('stellarStatsTheme') || 'stars';
-        
-        // Apply theme visuals without rendering
-        document.body.setAttribute('data-theme', savedTheme);
-        themeIcon.innerHTML = icons[savedTheme];
-        currentThemeIndex = themes.indexOf(savedTheme);
-        if (savedTheme === 'stars' && typeof particlesJS !== 'undefined') {
-            particlesJS("particles-js",{"particles":{"number":{"value":80,"density":{"enable":true,"value_area":800}},"color":{"value":"#ffffff"},"shape":{"type":"star"},"opacity":{"value":0.5,"random":true,"anim":{"enable":true,"speed":1,"opacity_min":0.1}},"size":{"value":3,"random":true},"move":{"enable":true,"speed":0.5,"direction":"none","random":true,"out_mode":"out"}}});
-        }
-        
-        // Unconditionally render the app state
-        render();
+        applyTheme(savedTheme);
     }
 
     initializeApp();
